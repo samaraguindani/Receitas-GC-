@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{% if receita %}Editar{% else %}Nova{% endif %} receita{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4">{% if receita %}Editar receita{% else %}Nova receita{% endif %}</h1>
+
+<div class="card shadow-sm" style="max-width: 640px;">
+  <div class="card-body">
+    <form method="post">
+      <div class="mb-3">
+        <label class="form-label" for="nome">Nome</label>
+        <input class="form-control" id="nome" name="nome" required
+               value="{{ receita.nome if receita else '' }}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="descricao">Descrição</label>
+        <textarea class="form-control" id="descricao" name="descricao" rows="4">{{ receita.descricao if receita and receita.descricao else '' }}</textarea>
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label" for="data_registro">Data de registro</label>
+          <input type="date" class="form-control" id="data_registro" name="data_registro"
+                 value="{{ receita.data_registro if receita else '' }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="custo">Custo (R$)</label>
+          <input class="form-control" id="custo" name="custo" step="0.01" min="0"
+                 value="{{ receita.custo if receita else '' }}">
+        </div>
+      </div>
+      <div class="mb-4">
+        <label class="form-label">Tipo</label>
+        <div class="d-flex gap-3">
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="tipo_receita" id="tipo_doce" value="doce"
+                   {% if not receita or receita.tipo_receita == 'doce' %}checked{% endif %}>
+            <label class="form-check-label" for="tipo_doce">Doce</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="tipo_receita" id="tipo_salgada" value="salgada"
+                   {% if receita and receita.tipo_receita == 'salgada' %}checked{% endif %}>
+            <label class="form-check-label" for="tipo_salgada">Salgada</label>
+          </div>
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <a href="{{ url_for('listar_receitas') }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
