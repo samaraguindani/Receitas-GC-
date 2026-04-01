@@ -86,7 +86,7 @@ Relação: nesta versão não há chave estrangeira entre `receita` e `usuario` 
 No terminal do seu computador (PowerShell, CMD ou Git Bash):
 
 ```bash
-ssh univates@177.44.248.45
+ssh univates@177.44.248.89
 ```
 
 Aceite a impressão digital do host, se for a primeira conexão. Use a senha ou chave SSH fornecida pela instituição.
@@ -104,7 +104,7 @@ Copiar o projeto para a VM (exemplos):
 
 - **SCP a partir do Windows (PowerShell):**
   ```powershell
-  scp -r "C:\Users\samil\OneDrive\Documentos\Receitas" univates@177.44.248.45:~/
+  scp -r "C:\Users\samil\OneDrive\Documentos\Receitas" univates@177.44.248.89:~/
   ```
 - Ou clone via Git, se o projeto estiver em um repositório remoto.
 
@@ -120,37 +120,72 @@ python init_db.py
 
 ### Implantação da aplicação (tornar público na rede da VM)
 
-Defina uma chave secreta forte para sessões (exemplo; gere outra em produção):
+Defina uma chave secreta forte para sessões:
 
 ```bash
 export FLASK_SECRET_KEY="altere-para-uma-string-longa-e-aleatoria"
 ```
 
-Opcional: editar `app.py` para ler `os.environ.get("FLASK_SECRET_KEY", "fallback")` — no projeto atual a chave está fixa para simplicidade; **em produção, use variável de ambiente**.
+**Opção A — Flask (desenvolvimento / teste rápido, porta 5000)**
 
-Subir com Gunicorn escutando em todas as interfaces (**porta 8000** como exemplo):
+```bash
+cd ~/Receitas-GC-   # ou o nome da sua pasta do projeto
+source .venv/bin/activate
+export FLASK_USE_RELOADER=0
+python app.py
+```
+
+O `app.py` já escuta em `0.0.0.0` na porta definida por `PORT` (padrão **5000**).  
+**Importante:** `python app.py --host=0.0.0.0 --port=5000` **não altera** host/porta no Flask; esses argumentos são ignorados. Use `export PORT=5000` se quiser outra porta.
+
+**Opção B — Gunicorn (recomendado para deixar rodando)**
 
 ```bash
 source .venv/bin/activate
-gunicorn -w 2 -b 0.0.0.0:8000 app:app
+gunicorn -w 2 -b 0.0.0.0:5000 app:app
 ```
 
-Para manter o processo após sair do SSH, use `screen`, `tmux` ou configure um serviço `systemd` (veja exemplos na documentação do systemd).
+(Use `8000` no lugar de `5000` se preferir; a URL no navegador deve usar a mesma porta.)
 
-Se a VM tiver firewall (`ufw`):
+Para manter o processo após sair do SSH, use `screen`, `tmux` ou um serviço `systemd`.
 
-```bash
-sudo ufw allow 8000/tcp
-sudo ufw reload
-```
+---
+
+### Firewall: se o navegador “carrega infinito” ou não abre
+
+O servidor pode estar ok **dentro da VM**, mas o **tráfego da internet até a porta** estar bloqueado.
+
+1. **Na própria VM**, teste se responde:
+   ```bash
+   curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:5000/login
+   ```
+   Se retornar `200`, a aplicação está no ar.
+
+2. **Libere a porta no firewall** (Ubuntu/Debian com `ufw`):
+   ```bash
+   sudo ufw status
+   sudo ufw allow 5000/tcp
+   sudo ufw reload
+   ```
+   Se o `ufw` estiver **inactive**, o bloqueio pode ser outro (iptables, painel da nuvem, rede da faculdade).
+
+3. **No seu PC**, teste (PowerShell ou terminal):
+   ```bash
+   curl -v --connect-timeout 5 http://177.44.248.89:5000/login
+   ```
+   - **Timeout / sem resposta:** porta fechada no firewall da VM, bloqueio no roteador/rede da instituição, ou IP/porta incorretos. Peça ao professor/infra se a porta **5000** é permitida de fora; às vezes só **80** ou **443** estão liberados (aí seria necessário Nginx na frente ou pedir liberação).
+
+4. Mantenha o terminal SSH **aberto** enquanto testa com `python app.py`; se fechar o SSH sem `screen`/serviço, o processo encerra.
+
+---
 
 ### URL de acesso
 
-Com o Gunicorn em `0.0.0.0:8000`, use no navegador:
+Com a aplicação em `0.0.0.0:5000` e firewall liberado:
 
-**`http://177.44.248.45:8000`**
+**`http://177.44.248.89:5000`**
 
-(Se a rede exigir HTTPS ou outra porta, siga as regras da instituição ou coloque um Nginx/Caddy na frente.)
+Se você usar Gunicorn em outra porta (ex.: 8000), use **`http://177.44.248.89:8000`**.
 
 ---
 
