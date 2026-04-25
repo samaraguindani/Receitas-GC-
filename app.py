@@ -47,8 +47,11 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     def get_db() -> sqlite3.Connection:
         if "db" not in g:
-            g.db = sqlite3.connect(app.config["DATABASE"])
+            g.db = sqlite3.connect(app.config["DATABASE"], timeout=10)
             g.db.row_factory = sqlite3.Row
+            # Reduz erros intermitentes de lock quando rodando com multiplos workers.
+            g.db.execute("PRAGMA journal_mode=WAL")
+            g.db.execute("PRAGMA busy_timeout=5000")
         return g.db
 
     @app.teardown_appcontext
@@ -224,30 +227,40 @@ def create_app(test_config: dict | None = None) -> Flask:
     @login_required
     def exportar_pdf():
         filtro_data, filtro_tipo = parse_filtros()
-        rows = query_receitas(filtro_data=filtro_data, filtro_tipo=filtro_tipo)
-        pdf_bytes = exportar_receitas_pdf(rows)
-        return Response(
-            pdf_bytes,
-            mimetype="application/pdf",
-            headers={"Content-Disposition": "attachment; filename=receitas.pdf"},
-        )
+        try:
+            rows = query_receitas(filtro_data=filtro_data, filtro_tipo=filtro_tipo)
+            pdf_bytes = exportar_receitas_pdf(rows)
+            return Response(
+                pdf_bytes,
+                mimetype="application/pdf",
+                headers={"Content-Disposition": "attachment; filename=receitas.pdf"},
+            )
+        except Exception:
+            app.logger.exception("Falha ao gerar PDF geral.")
+            flash("Erro ao gerar PDF. Tente novamente.", "danger")
+            return redirect(url_for("listar_receitas"))
 
     @app.route("/receitas/<int:rid>/exportar-pdf")
     @login_required
     def exportar_pdf_receita(rid: int):
-        row = query_receita_por_id(rid)
-        if not row:
-            flash("Receita nao encontrada.", "warning")
-            return redirect(url_for("listar_receitas"))
+        try:
+            row = query_receita_por_id(rid)
+            if not row:
+                flash("Receita nao encontrada.", "warning")
+                return redirect(url_for("listar_receitas"))
 
-        pdf_bytes = exportar_receitas_pdf([row])
-        return Response(
-            pdf_bytes,
-            mimetype="application/pdf",
-            headers={
-                "Content-Disposition": f"attachment; filename=receita-{rid}.pdf"
-            },
-        )
+            pdf_bytes = exportar_receitas_pdf([row])
+            return Response(
+                pdf_bytes,
+                mimetype="application/pdf",
+                headers={
+                    "Content-Disposition": f"attachment; filename=receita-{rid}.pdf"
+                },
+            )
+        except Exception:
+            app.logger.exception("Falha ao gerar PDF individual (id=%s).", rid)
+            flash("Erro ao gerar PDF da receita.", "danger")
+            return redirect(url_for("listar_receitas"))
 
     @app.route("/receitas/nova", methods=["GET", "POST"])
     @login_required
@@ -348,10 +361,14 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.route("/receitas/<int:rid>/excluir", methods=["POST"])
     @login_required
     def excluir_receita(rid: int):
-        db = get_db()
-        db.execute("DELETE FROM receita WHERE id = ?", (rid,))
-        db.commit()
-        flash("Receita excluida.", "info")
+        try:
+            db = get_db()
+            db.execute("DELETE FROM receita WHERE id = ?", (rid,))
+            db.commit()
+            flash("Receita excluida.", "info")
+        except Exception:
+            app.logger.exception("Falha ao excluir receita (id=%s).", rid)
+            flash("Erro ao excluir receita. Tente novamente.", "danger")
         return redirect(url_for("listar_receitas"))
 
     return app
