@@ -1,0 +1,15 @@
+﻿[Unit]
+Description=Receitas Flask application (Gunicorn)
+After=network.target
+
+[Service]
+User=univates
+Group=www-data
+WorkingDirectory=/home/univates/Receitas-GC-
+EnvironmentFile=/etc/receitas/receitas.env
+ExecStart=/home/univates/Receitas-GC-/.venv/bin/gunicorn --workers 2 --bind 0.0.0.0:${PORT} app:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

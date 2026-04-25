@@ -1,137 +1,43 @@
-# Documentação — Registro de Receitas (Flask)
+ï»¿# Documentacao - Registro de Receitas (Flask)
 
-## 1) O que foi implementado
+## 1) Implementacao pronta
 
-Aplicação web em **Python + Flask + SQLite** com:
-
-- Login (`/login`)
-- Listagem de receitas (`/`)
+Aplicacao web em Python + Flask + SQLite com:
+- Login
 - CRUD de receitas
-- **Filtros** por **data** e **status** (ativa/inativa)
-- **Exportação para PDF**
-- **Envio de e-mail (Gmail SMTP)** após **criar** ou **editar** receita
-- **20 testes unitários**
+- Filtros por data e status
+- Exportacao para PDF
+- Envio de e-mail apos criar/editar receita (SMTP Gmail)
+- 20 testes unitarios
 
 ---
 
-## 2) Modelagem do banco
+## 2) Melhor forma recomendada para VM
 
-### Tabela `usuario`
-- `id` INTEGER PK AUTOINCREMENT
-- `nome` TEXT NOT NULL
-- `login` TEXT NOT NULL UNIQUE
-- `senha` TEXT NOT NULL (hash)
-- `situacao` TEXT NOT NULL DEFAULT `ativo`
+Use este padrao:
+- Gunicorn para servir a app
+- systemd para manter o processo sempre ativo
+- arquivo de ambiente separado para segredos
 
-### Tabela `receita`
-- `id` INTEGER PK AUTOINCREMENT
-- `nome` TEXT NOT NULL
-- `descricao` TEXT
-- `data_registro` TEXT NOT NULL
-- `custo` REAL NOT NULL
-- `tipo_receita` TEXT NOT NULL (`doce`/`salgada`)
-- `status_receita` TEXT NOT NULL (`ativa`/`inativa`)
-
-Arquivos:
-- `schema.sql`
-- `seed_receitas.sql` (10 inserts)
-- `init_db.py` (recria banco + seed + usuário admin)
+Arquivos criados no projeto para facilitar:
+- `deploy/receitas.env.example`
+- `deploy/receitas.service.example`
 
 ---
 
-## 3) Interface desenvolvida
+## 3) Passo a passo (GitHub -> VM)
 
-- `templates/login.html` — tela de login
-- `templates/receitas_lista.html` — listagem + filtros + botão exportar PDF
-- `templates/receita_form.html` — criar/editar com tipo e status
+### 3.1 No seu computador (subir para GitHub)
 
----
-
-## 4) Rodar local (Windows)
-
-```powershell
+```bash
 cd "C:\Users\samil\OneDrive\Documentos\Receitas"
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-py -m pip install -r requirements.txt
-py init_db.py
-py app.py
-```
-
-Acesse: `http://127.0.0.1:5000`
-
-Login padrão:
-- usuário: `admin`
-- senha: `admin123`
-
----
-
-## 5) Configurar e-mail Gmail (obrigatório para envio)
-
-A aplicação envia e-mail ao criar/editar receita **somente** se as variáveis SMTP estiverem definidas.
-
-### Passos no Google
-1. Entrar na conta Google que enviará os e-mails.
-2. Ativar **Verificação em 2 Etapas**.
-3. Criar uma **Senha de app** (App Password) para "Mail".
-4. Guardar a senha de app (16 caracteres).
-
-### Variáveis de ambiente (Linux/VM)
-
-```bash
-export SMTP_HOST="smtp.gmail.com"
-export SMTP_PORT="587"
-export SMTP_USER="seu_email@gmail.com"
-export SMTP_PASSWORD="SENHA_DE_APP_GOOGLE"
-export SMTP_FROM="seu_email@gmail.com"
-export SMTP_TO="destino@gmail.com"
-```
-
-> Se não configurar essas variáveis, a aplicação continua funcionando, mas não envia e-mail.
-
----
-
-## 6) Testes unitários (20)
-
-Arquivo: `tests/test_app.py`
-
-Executar:
-
-```bash
-python -m unittest -v
-```
-
-Os testes cobrem login, CRUD, filtros, exportação PDF e envio de e-mail (com mock).
-
----
-
-## 7) Subir no GitHub (passo a passo)
-
-> Faça no seu computador local, na pasta do projeto.
-
-```bash
 git status
 git add .
-git commit --trailer "Made-with: Cursor" -m "Implementa email, filtros, PDF e 20 testes"
+git commit --trailer "Made-with: Cursor" -m "Configura deploy recomendado com systemd e env file"
+git push origin main
 ```
 
-Criar repositório no GitHub (site) e copiar a URL HTTPS/SSH.
-
-```bash
-git remote add origin <URL_DO_REPOSITORIO>
-git branch -M main
-git push -u origin main
-```
-
----
-
-## 8) Publicação na VM via GitHub
-
-VM correta:
-- IP: `177.44.248.89`
-- SSH: `ssh univates@177.44.248.89`
-
-### 8.1 Acessar VM e instalar dependências
+### 3.2 Na VM (177.44.248.89)
 
 ```bash
 ssh univates@177.44.248.89
@@ -139,14 +45,21 @@ sudo apt update
 sudo apt install -y git python3 python3-venv python3-pip
 ```
 
-### 8.2 Clonar projeto na VM
+Se ainda nao clonou:
 
 ```bash
 git clone <URL_DO_REPOSITORIO> Receitas-GC-
 cd Receitas-GC-
 ```
 
-### 8.3 Ambiente virtual + dependências
+Se ja clonou:
+
+```bash
+cd Receitas-GC-
+git pull origin main
+```
+
+### 3.3 Ambiente Python
 
 ```bash
 python3 -m venv .venv
@@ -155,77 +68,135 @@ pip install -r requirements.txt
 python init_db.py
 ```
 
-### 8.4 Configurar variáveis de ambiente (app + e-mail)
+---
+
+## 4) Configurar segredos (arquivo env seguro)
+
+Crie pasta para configuracao e proteja permissao:
 
 ```bash
-export FLASK_SECRET_KEY="uma-chave-longa-e-segura"
-export PORT="5000"
-export FLASK_USE_RELOADER="0"
-
-export SMTP_HOST="smtp.gmail.com"
-export SMTP_PORT="587"
-export SMTP_USER="seu_email@gmail.com"
-export SMTP_PASSWORD="SENHA_DE_APP_GOOGLE"
-export SMTP_FROM="seu_email@gmail.com"
-export SMTP_TO="destino@gmail.com"
+sudo mkdir -p /etc/receitas
+sudo cp deploy/receitas.env.example /etc/receitas/receitas.env
+sudo chown root:root /etc/receitas/receitas.env
+sudo chmod 600 /etc/receitas/receitas.env
 ```
 
-### 8.5 Subir aplicação
-
-Opção A (simples):
+Edite o arquivo:
 
 ```bash
-python app.py
+sudo nano /etc/receitas/receitas.env
 ```
 
-Opção B (recomendado):
+Preencha com seus dados reais:
 
-```bash
-gunicorn -w 2 -b 0.0.0.0:5000 app:app
+```env
+FLASK_SECRET_KEY=chave-grande-segura
+PORT=5000
+FLASK_USE_RELOADER=0
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=boardlabgames@gmail.com
+SMTP_PASSWORD=SENHA_DE_APP_GOOGLE
+SMTP_FROM=boardlabgames@gmail.com
+SMTP_TO=samara.guindani@universo.univates.br
 ```
 
-### 8.6 Liberar porta no firewall (se `ufw` ativo)
+Importante: `SMTP_PASSWORD` deve ser senha de app do Google, nao senha normal.
+
+---
+
+## 5) Configurar service no systemd
+
+Copie o service de exemplo:
 
 ```bash
-sudo ufw status
+sudo cp deploy/receitas.service.example /etc/systemd/system/receitas.service
+```
+
+Se seu caminho do projeto for diferente de `/home/univates/Receitas-GC-`, edite:
+
+```bash
+sudo nano /etc/systemd/system/receitas.service
+```
+
+Valide estes campos:
+- `WorkingDirectory`
+- `ExecStart`
+- `User`
+
+Depois ative:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable receitas
+sudo systemctl restart receitas
+```
+
+Ver status/log:
+
+```bash
+sudo systemctl status receitas --no-pager
+sudo journalctl -u receitas -n 100 --no-pager
+```
+
+---
+
+## 6) Liberar porta e testar
+
+```bash
 sudo ufw allow 5000/tcp
 sudo ufw reload
+sudo ufw status
 ```
 
-### 8.7 Testar acesso
-
-Na VM:
+Teste na VM:
 
 ```bash
 curl -v http://127.0.0.1:5000/login
 ```
 
-No seu PC:
+Teste no seu PC:
 
 ```bash
 curl -v http://177.44.248.89:5000/login
 ```
 
-URL final esperada:
-- `http://177.44.248.89:5000`
+URL:
+- http://177.44.248.89:5000
 
 ---
 
-## 9) Estrutura principal do projeto
+## 7) Atualizar app no futuro
 
-- `app.py`
-- `init_db.py`
-- `schema.sql`
-- `seed_receitas.sql`
-- `requirements.txt`
-- `templates/`
-- `static/`
-- `tests/test_app.py`
+Sempre que mudar codigo no GitHub:
+
+```bash
+cd ~/Receitas-GC-
+git pull origin main
+source .venv/bin/activate
+pip install -r requirements.txt
+sudo systemctl restart receitas
+sudo systemctl status receitas --no-pager
+```
 
 ---
 
-## 10) Observações importantes
+## 8) Gmail (resumo rapido)
 
-- A senha de e-mail do Gmail deve ser **senha de app**, não a senha normal da conta.
-- Em produção, não deixe segredos fixos no código; use sempre variável de ambiente.
-- Se a URL externa não abrir, normalmente é firewall/rede (não o Flask).
+1. Conta Google com verificacao em 2 etapas ativa
+2. Criar senha de app
+3. Colar senha de app em `SMTP_PASSWORD` no arquivo `/etc/receitas/receitas.env`
+4. Reiniciar service: `sudo systemctl restart receitas`
+
+---
+
+## 9) Checklist final
+
+- [ ] Projeto atualizado no GitHub
+- [ ] Dependencias instaladas na VM
+- [ ] Banco criado com `python init_db.py`
+- [ ] `/etc/receitas/receitas.env` preenchido
+- [ ] `receitas.service` ativo no systemd
+- [ ] Porta 5000 liberada
+- [ ] URL abre externamente
+- [ ] Criar/editar receita envia e-mail

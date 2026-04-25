@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -8,6 +8,7 @@ venv/
 .venv/
 env/
 .env
+.env.*
 *.egg-info/
 dist/
 build/
@@ -25,6 +26,6 @@ build/
 .DS_Store
 Thumbs.db
 
-# Flask / sessões
+# Flask / sessoes
 instance/
 .flaskenv
