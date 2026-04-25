@@ -1,10 +1,10 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}Receitas cadastradas{% endblock %}
 {% block content %}
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
   <h1 class="h3 mb-0">Receitas cadastradas</h1>
   <div class="d-flex gap-2">
-    <a href="{{ url_for('exportar_pdf', data=filtro_data, status=filtro_status) }}" class="btn btn-outline-dark">Exportar PDF</a>
+    <a href="{{ url_for('exportar_pdf', data=filtro_data, tipo=filtro_tipo) }}" class="btn btn-outline-dark">Exportar PDF</a>
     <a href="{{ url_for('nova_receita') }}" class="btn btn-success">Nova receita</a>
   </div>
 </div>
@@ -16,11 +16,11 @@
       <input type="date" class="form-control" id="filtro_data" name="data" value="{{ filtro_data }}">
     </div>
     <div class="col-md-4">
-      <label class="form-label" for="filtro_status">Filtrar por status</label>
-      <select class="form-select" id="filtro_status" name="status">
-        <option value="" {% if not filtro_status %}selected{% endif %}>Todos</option>
-        <option value="ativa" {% if filtro_status == 'ativa' %}selected{% endif %}>Ativa</option>
-        <option value="inativa" {% if filtro_status == 'inativa' %}selected{% endif %}>Inativa</option>
+      <label class="form-label" for="filtro_tipo">Filtrar por tipo</label>
+      <select class="form-select" id="filtro_tipo" name="tipo">
+        <option value="" {% if not filtro_tipo %}selected{% endif %}>Todos</option>
+        <option value="doce" {% if filtro_tipo == 'doce' %}selected{% endif %}>Doce</option>
+        <option value="salgada" {% if filtro_tipo == 'salgada' %}selected{% endif %}>Salgada</option>
       </select>
     </div>
     <div class="col-md-4 d-flex gap-2">
@@ -36,10 +36,9 @@
       <tr>
         <th>Nome</th>
         <th>Tipo</th>
-        <th>Status</th>
         <th>Data</th>
         <th class="text-end">Custo (R$)</th>
-        <th class="text-end" style="width: 180px;">Acoes</th>
+        <th class="text-end" style="width: 260px;">Acoes</th>
       </tr>
     </thead>
     <tbody>
@@ -58,16 +57,10 @@
           <span class="badge text-bg-secondary">Salgada</span>
           {% endif %}
         </td>
-        <td>
-          {% if r.status_receita == 'ativa' %}
-          <span class="badge text-bg-success">Ativa</span>
-          {% else %}
-          <span class="badge text-bg-light text-dark border">Inativa</span>
-          {% endif %}
-        </td>
         <td>{{ r.data_registro }}</td>
         <td class="text-end">{{ "%.2f"|format(r.custo) }}</td>
         <td class="text-end">
+          <a href="{{ url_for('exportar_pdf_receita', rid=r.id) }}" class="btn btn-sm btn-outline-dark">Exportar</a>
           <a href="{{ url_for('editar_receita', rid=r.id) }}" class="btn btn-sm btn-outline-primary">Editar</a>
           <form method="post" action="{{ url_for('excluir_receita', rid=r.id) }}" class="d-inline" onsubmit="return confirm('Excluir esta receita?');">
             <button type="submit" class="btn btn-sm btn-outline-danger">Excluir</button>
@@ -76,7 +69,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="6" class="text-center text-muted py-4">Nenhuma receita cadastrada para o filtro selecionado.</td>
+        <td colspan="5" class="text-center text-muted py-4">Nenhuma receita cadastrada para o filtro selecionado.</td>
       </tr>
       {% endfor %}
     </tbody>

@@ -1,4 +1,4 @@
-﻿import sqlite3
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -53,41 +53,34 @@ class ReceitasAppTests(unittest.TestCase):
             follow_redirects=True,
         )
 
-    # 1
     def test_login_page_loads(self):
         resp = self.client.get("/login")
         self.assertEqual(resp.status_code, 200)
         self.assertIn("Acesso", resp.get_data(as_text=True))
 
-    # 2
     def test_root_requires_login(self):
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/login", resp.location)
 
-    # 3
     def test_login_success(self):
         resp = self._login()
         self.assertEqual(resp.status_code, 200)
         self.assertIn("Receitas cadastradas", resp.get_data(as_text=True))
 
-    # 4
     def test_login_invalid_password(self):
         resp = self._login(senha="errada")
         self.assertIn("Login ou senha inval", resp.get_data(as_text=True))
 
-    # 5
     def test_login_inactive_user(self):
         resp = self._login(login="bloq", senha="abc123")
         self.assertIn("Login ou senha inval", resp.get_data(as_text=True))
 
-    # 6
     def test_logout_clears_session(self):
         self._login()
         resp = self.client.get("/logout", follow_redirects=True)
         self.assertIn("Acesso", resp.get_data(as_text=True))
 
-    # 7
     def test_list_has_seed_data(self):
         self._login()
         resp = self.client.get("/")
@@ -95,7 +88,6 @@ class ReceitasAppTests(unittest.TestCase):
         self.assertIn("Coxinha de frango", text)
         self.assertIn("Brownie", text)
 
-    # 8
     def test_filter_by_date(self):
         self._login()
         resp = self.client.get("/?data=2024-06-01")
@@ -103,31 +95,27 @@ class ReceitasAppTests(unittest.TestCase):
         self.assertIn("Brownie", text)
         self.assertNotIn("Coxinha de frango", text)
 
-    # 9
-    def test_filter_by_status_ativa(self):
+    def test_filter_by_tipo_doce(self):
         self._login()
-        resp = self.client.get("/?status=ativa")
+        resp = self.client.get("/?tipo=doce")
         text = resp.get_data(as_text=True)
-        self.assertIn("Coxinha de frango", text)
-        self.assertNotIn("Pastel de queijo", text)
-
-    # 10
-    def test_filter_by_status_inativa(self):
-        self._login()
-        resp = self.client.get("/?status=inativa")
-        text = resp.get_data(as_text=True)
-        self.assertIn("Pastel de queijo", text)
+        self.assertIn("Brownie", text)
         self.assertNotIn("Coxinha de frango", text)
 
-    # 11
-    def test_invalid_status_filter_is_ignored(self):
+    def test_filter_by_tipo_salgada(self):
         self._login()
-        resp = self.client.get("/?status=zzz")
+        resp = self.client.get("/?tipo=salgada")
         text = resp.get_data(as_text=True)
         self.assertIn("Coxinha de frango", text)
-        self.assertIn("Pastel de queijo", text)
+        self.assertNotIn("Brownie", text)
 
-    # 12
+    def test_invalid_tipo_filter_is_ignored(self):
+        self._login()
+        resp = self.client.get("/?tipo=zzz")
+        text = resp.get_data(as_text=True)
+        self.assertIn("Coxinha de frango", text)
+        self.assertIn("Brownie", text)
+
     def test_create_recipe_success_without_email_config(self):
         self._login()
         resp = self.client.post(
@@ -138,13 +126,11 @@ class ReceitasAppTests(unittest.TestCase):
                 "data_registro": "2026-04-25",
                 "custo": "9.90",
                 "tipo_receita": "doce",
-                "status_receita": "ativa",
             },
             follow_redirects=True,
         )
         self.assertIn("Receita cadastrada.", resp.get_data(as_text=True))
 
-    # 13
     def test_create_recipe_validates_name(self):
         self._login()
         resp = self.client.post(
@@ -155,13 +141,11 @@ class ReceitasAppTests(unittest.TestCase):
                 "data_registro": "2026-04-25",
                 "custo": "9.90",
                 "tipo_receita": "doce",
-                "status_receita": "ativa",
             },
             follow_redirects=True,
         )
         self.assertIn("Nome", resp.get_data(as_text=True))
 
-    # 14
     def test_create_recipe_validates_cost(self):
         self._login()
         resp = self.client.post(
@@ -172,13 +156,11 @@ class ReceitasAppTests(unittest.TestCase):
                 "data_registro": "2026-04-25",
                 "custo": "abc",
                 "tipo_receita": "doce",
-                "status_receita": "ativa",
             },
             follow_redirects=True,
         )
         self.assertIn("Custo", resp.get_data(as_text=True))
 
-    # 15
     def test_update_recipe_success(self):
         self._login()
         resp = self.client.post(
@@ -189,31 +171,26 @@ class ReceitasAppTests(unittest.TestCase):
                 "data_registro": "2024-01-15",
                 "custo": "2.20",
                 "tipo_receita": "salgada",
-                "status_receita": "inativa",
             },
             follow_redirects=True,
         )
         self.assertIn("Receita atualizada.", resp.get_data(as_text=True))
 
-    # 16
     def test_update_recipe_not_found(self):
         self._login()
         resp = self.client.get("/receitas/999/editar", follow_redirects=True)
         self.assertIn("encontrada", resp.get_data(as_text=True))
 
-    # 17
     def test_delete_recipe_success(self):
         self._login()
         resp = self.client.post("/receitas/1/excluir", follow_redirects=True)
         self.assertIn("Receita exclu", resp.get_data(as_text=True))
 
-    # 18
     def test_export_pdf_requires_login(self):
         resp = self.client.get("/receitas/exportar-pdf")
         self.assertEqual(resp.status_code, 302)
         self.assertIn("/login", resp.location)
 
-    # 19
     def test_export_pdf_success(self):
         self._login()
         resp = self.client.get("/receitas/exportar-pdf")
@@ -221,7 +198,13 @@ class ReceitasAppTests(unittest.TestCase):
         self.assertEqual(resp.content_type, "application/pdf")
         self.assertIn("attachment; filename=receitas.pdf", resp.headers.get("Content-Disposition", ""))
 
-    # 20
+    def test_export_single_receita_pdf_success(self):
+        self._login()
+        resp = self.client.get("/receitas/1/exportar-pdf")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.content_type, "application/pdf")
+        self.assertIn("attachment; filename=receita-1.pdf", resp.headers.get("Content-Disposition", ""))
+
     @patch("app.smtplib.SMTP")
     def test_email_is_sent_on_create_when_configured(self, smtp_mock):
         self.app.config.update(
@@ -239,7 +222,6 @@ class ReceitasAppTests(unittest.TestCase):
                 "data_registro": "2026-04-25",
                 "custo": "11.50",
                 "tipo_receita": "doce",
-                "status_receita": "ativa",
             },
             follow_redirects=True,
         )

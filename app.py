@@ -1,4 +1,4 @@
-﻿import os
+import os
 import smtplib
 import sqlite3
 from datetime import date
@@ -25,7 +25,6 @@ from werkzeug.security import check_password_hash
 ROOT = Path(__file__).resolve().parent
 DEFAULT_DATABASE = ROOT / "receitas.db"
 ALLOWED_TIPOS = {"doce", "salgada"}
-ALLOWED_STATUS = {"ativa", "inativa"}
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -69,14 +68,14 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     def parse_filtros() -> tuple[str, str]:
         filtro_data = request.args.get("data", "").strip()
-        filtro_status = request.args.get("status", "").strip().lower()
-        if filtro_status and filtro_status not in ALLOWED_STATUS:
-            filtro_status = ""
-        return filtro_data, filtro_status
+        filtro_tipo = request.args.get("tipo", "").strip().lower()
+        if filtro_tipo and filtro_tipo not in ALLOWED_TIPOS:
+            filtro_tipo = ""
+        return filtro_data, filtro_tipo
 
-    def query_receitas(filtro_data: str = "", filtro_status: str = ""):
+    def query_receitas(filtro_data: str = "", filtro_tipo: str = ""):
         sql = """
-            SELECT id, nome, descricao, data_registro, custo, tipo_receita, status_receita
+            SELECT id, nome, descricao, data_registro, custo, tipo_receita
             FROM receita
             WHERE 1=1
         """
@@ -84,11 +83,21 @@ def create_app(test_config: dict | None = None) -> Flask:
         if filtro_data:
             sql += " AND data_registro = ?"
             params.append(filtro_data)
-        if filtro_status:
-            sql += " AND status_receita = ?"
-            params.append(filtro_status)
+        if filtro_tipo:
+            sql += " AND tipo_receita = ?"
+            params.append(filtro_tipo)
         sql += " ORDER BY data_registro DESC, id DESC"
         return get_db().execute(sql, params).fetchall()
+
+    def query_receita_por_id(rid: int):
+        return get_db().execute(
+            """
+            SELECT id, nome, descricao, data_registro, custo, tipo_receita
+            FROM receita
+            WHERE id = ?
+            """,
+            (rid,),
+        ).fetchone()
 
     def enviar_email_acao_receita(acao: str, receita_nome: str, receita_id: int | None = None) -> bool:
         smtp_user = app.config.get("SMTP_USER")
@@ -114,7 +123,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     def exportar_receitas_pdf(receitas) -> bytes:
         buffer = BytesIO()
         pdf = canvas.Canvas(buffer, pagesize=A4)
-        width, height = A4
+        _, height = A4
         y = height - 40
 
         pdf.setTitle("Relatorio de Receitas")
@@ -128,22 +137,35 @@ def create_app(test_config: dict | None = None) -> Flask:
 
         pdf.setFont("Helvetica-Bold", 9)
         pdf.drawString(40, y, "Nome")
-        pdf.drawString(220, y, "Tipo")
-        pdf.drawString(280, y, "Status")
-        pdf.drawString(350, y, "Data")
+        pdf.drawString(180, y, "Tipo")
+        pdf.drawString(240, y, "Data")
+        pdf.drawString(310, y, "Descricao")
         pdf.drawRightString(560, y, "Custo")
         y -= 16
 
         pdf.setFont("Helvetica", 9)
         for r in receitas:
-            if y <= 40:
+            if y <= 54:
                 pdf.showPage()
                 y = height - 40
+                pdf.setFont("Helvetica-Bold", 9)
+                pdf.drawString(40, y, "Nome")
+                pdf.drawString(180, y, "Tipo")
+                pdf.drawString(240, y, "Data")
+                pdf.drawString(310, y, "Descricao")
+                pdf.drawRightString(560, y, "Custo")
+                y -= 16
                 pdf.setFont("Helvetica", 9)
-            pdf.drawString(40, y, str(r["nome"])[:32])
-            pdf.drawString(220, y, str(r["tipo_receita"]))
-            pdf.drawString(280, y, str(r["status_receita"]))
-            pdf.drawString(350, y, str(r["data_registro"]))
+            nome = str(r["nome"])[:26]
+            tipo = str(r["tipo_receita"])
+            data_reg = str(r["data_registro"])
+            descricao = (r["descricao"] or "").replace("\n", " ").strip()
+            descricao = descricao[:48] if descricao else "-"
+
+            pdf.drawString(40, y, nome)
+            pdf.drawString(180, y, tipo)
+            pdf.drawString(240, y, data_reg)
+            pdf.drawString(310, y, descricao)
             pdf.drawRightString(560, y, f"R$ {float(r['custo']):.2f}")
             y -= 14
 
@@ -182,29 +204,48 @@ def create_app(test_config: dict | None = None) -> Flask:
         session.clear()
         return redirect(url_for("login"))
 
+    @app.route("/health")
+    def health():
+        return {"status": "ok"}, 200
+
     @app.route("/")
     @login_required
     def listar_receitas():
-        filtro_data, filtro_status = parse_filtros()
-        rows = query_receitas(filtro_data=filtro_data, filtro_status=filtro_status)
+        filtro_data, filtro_tipo = parse_filtros()
+        rows = query_receitas(filtro_data=filtro_data, filtro_tipo=filtro_tipo)
         return render_template(
             "receitas_lista.html",
             receitas=rows,
             filtro_data=filtro_data,
-            filtro_status=filtro_status,
+            filtro_tipo=filtro_tipo,
         )
 
     @app.route("/receitas/exportar-pdf")
     @login_required
     def exportar_pdf():
-        filtro_data, filtro_status = parse_filtros()
-        rows = query_receitas(filtro_data=filtro_data, filtro_status=filtro_status)
+        filtro_data, filtro_tipo = parse_filtros()
+        rows = query_receitas(filtro_data=filtro_data, filtro_tipo=filtro_tipo)
         pdf_bytes = exportar_receitas_pdf(rows)
         return Response(
             pdf_bytes,
             mimetype="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=receitas.pdf"},
+        )
+
+    @app.route("/receitas/<int:rid>/exportar-pdf")
+    @login_required
+    def exportar_pdf_receita(rid: int):
+        row = query_receita_por_id(rid)
+        if not row:
+            flash("Receita nao encontrada.", "warning")
+            return redirect(url_for("listar_receitas"))
+
+        pdf_bytes = exportar_receitas_pdf([row])
+        return Response(
+            pdf_bytes,
+            mimetype="application/pdf",
             headers={
-                "Content-Disposition": "attachment; filename=receitas.pdf",
+                "Content-Disposition": f"attachment; filename=receita-{rid}.pdf"
             },
         )
 
@@ -216,7 +257,6 @@ def create_app(test_config: dict | None = None) -> Flask:
             descricao = request.form.get("descricao", "").strip()
             custo_raw = request.form.get("custo", "0").replace(",", ".")
             tipo = request.form.get("tipo_receita", "doce")
-            status = request.form.get("status_receita", "ativa")
             data_reg = request.form.get("data_registro") or date.today().isoformat()
 
             try:
@@ -227,8 +267,6 @@ def create_app(test_config: dict | None = None) -> Flask:
 
             if tipo not in ALLOWED_TIPOS:
                 tipo = "doce"
-            if status not in ALLOWED_STATUS:
-                status = "ativa"
             if not nome:
                 flash("Nome e obrigatorio.", "danger")
                 return render_template("receita_form.html", receita=None)
@@ -236,10 +274,10 @@ def create_app(test_config: dict | None = None) -> Flask:
             db = get_db()
             cursor = db.execute(
                 """
-                INSERT INTO receita (nome, descricao, data_registro, custo, tipo_receita, status_receita)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO receita (nome, descricao, data_registro, custo, tipo_receita)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (nome, descricao or None, data_reg, custo, tipo, status),
+                (nome, descricao or None, data_reg, custo, tipo),
             )
             db.commit()
 
@@ -248,6 +286,7 @@ def create_app(test_config: dict | None = None) -> Flask:
                 if enviou:
                     flash("E-mail de notificacao enviado.", "info")
             except Exception:
+                app.logger.exception("Falha ao enviar e-mail de notificacao (cadastro).")
                 flash("Receita salva, mas houve erro no envio de e-mail.", "warning")
 
             flash("Receita cadastrada.", "success")
@@ -269,7 +308,6 @@ def create_app(test_config: dict | None = None) -> Flask:
             descricao = request.form.get("descricao", "").strip()
             custo_raw = request.form.get("custo", "0").replace(",", ".")
             tipo = request.form.get("tipo_receita", "doce")
-            status = request.form.get("status_receita", "ativa")
             data_reg = request.form.get("data_registro") or date.today().isoformat()
 
             try:
@@ -280,8 +318,6 @@ def create_app(test_config: dict | None = None) -> Flask:
 
             if tipo not in ALLOWED_TIPOS:
                 tipo = "doce"
-            if status not in ALLOWED_STATUS:
-                status = "ativa"
             if not nome:
                 flash("Nome e obrigatorio.", "danger")
                 return render_template("receita_form.html", receita=dict(row))
@@ -289,10 +325,10 @@ def create_app(test_config: dict | None = None) -> Flask:
             db.execute(
                 """
                 UPDATE receita
-                SET nome=?, descricao=?, data_registro=?, custo=?, tipo_receita=?, status_receita=?
+                SET nome=?, descricao=?, data_registro=?, custo=?, tipo_receita=?
                 WHERE id=?
                 """,
-                (nome, descricao or None, data_reg, custo, tipo, status, rid),
+                (nome, descricao or None, data_reg, custo, tipo, rid),
             )
             db.commit()
 
@@ -301,6 +337,7 @@ def create_app(test_config: dict | None = None) -> Flask:
                 if enviou:
                     flash("E-mail de notificacao enviado.", "info")
             except Exception:
+                app.logger.exception("Falha ao enviar e-mail de notificacao (edicao).")
                 flash("Receita atualizada, mas houve erro no envio de e-mail.", "warning")
 
             flash("Receita atualizada.", "success")
@@ -326,9 +363,4 @@ app = create_app()
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "5000"))
     use_reloader = os.environ.get("FLASK_USE_RELOADER", "0") == "1"
-    app.run(
-        debug=True,
-        host="0.0.0.0",
-        port=port,
-        use_reloader=use_reloader,
-    )
+    app.run(debug=True, host="0.0.0.0", port=port, use_reloader=use_reloader)

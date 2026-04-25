@@ -1,49 +1,180 @@
-﻿# Documentacao - Registro de Receitas (Flask)
+﻿# Documentacao - Projeto Receitas (Flask)
 
-## 1) Implementacao pronta
+## 1) Escopo implementado
 
 Aplicacao web em Python + Flask + SQLite com:
 - Login
 - CRUD de receitas
-- Filtros por data e status
-- Exportacao para PDF
+- Filtro por data
+- Filtro por tipo (`doce` ou `salgada`)
+- Exportacao PDF de todas as receitas filtradas
+- Exportacao PDF individual por receita (botao por linha)
 - Envio de e-mail apos criar/editar receita (SMTP Gmail)
-- 20 testes unitarios
+- Testes automatizados (21 testes)
 
 ---
 
-## 2) Melhor forma recomendada para VM
+## 2) Estrutura principal do projeto
 
-Use este padrao:
-- Gunicorn para servir a app
-- systemd para manter o processo sempre ativo
-- arquivo de ambiente separado para segredos
-
-Arquivos criados no projeto para facilitar:
-- `deploy/receitas.env.example`
-- `deploy/receitas.service.example`
+- `app.py` - rotas, regras, e-mail, PDF
+- `schema.sql` - schema do banco
+- `seed_receitas.sql` - inserts iniciais
+- `init_db.py` - recria banco e popula dados
+- `templates/` - telas HTML
+- `tests/test_app.py` - testes automatizados
+- `test_email.py` - teste direto de SMTP
+- `test_local.ps1` - diagnostico rapido local no Windows
+- `requirements.txt` - dependencias
 
 ---
 
-## 3) Passo a passo (GitHub -> VM)
+## 3) Banco de dados
 
-### 3.1 No seu computador (subir para GitHub)
+### Tabela `usuario`
+- `id` INTEGER PRIMARY KEY AUTOINCREMENT
+- `nome` TEXT NOT NULL
+- `login` TEXT NOT NULL UNIQUE
+- `senha` TEXT NOT NULL
+- `situacao` TEXT NOT NULL DEFAULT `ativo`
+
+### Tabela `receita`
+- `id` INTEGER PRIMARY KEY AUTOINCREMENT
+- `nome` TEXT NOT NULL
+- `descricao` TEXT
+- `data_registro` TEXT NOT NULL
+- `custo` REAL NOT NULL
+- `tipo_receita` TEXT NOT NULL (`doce`/`salgada`)
+
+---
+
+## 4) Rotas principais
+
+- `/login` - login
+- `/logout` - logout
+- `/` - listagem com filtros
+- `/receitas/nova` - criar receita
+- `/receitas/<id>/editar` - editar receita
+- `/receitas/<id>/excluir` - excluir receita
+- `/receitas/exportar-pdf` - PDF com todas as receitas (respeita filtros)
+- `/receitas/<id>/exportar-pdf` - PDF da receita individual
+- `/health` - health check
+
+---
+
+## 5) Como rodar local (Windows)
+
+### 5.1 Preparar ambiente
+
+```powershell
+cd "C:\Users\samil\OneDrive\Documentos\Receitas"
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+py -m pip install -r requirements.txt
+py init_db.py
+```
+
+### 5.2 Rodar aplicacao
+
+```powershell
+$env:FLASK_SECRET_KEY="local-secret-key"
+$env:PORT="5000"
+$env:FLASK_USE_RELOADER="0"
+py app.py
+```
+
+Acesso local:
+- `http://127.0.0.1:5000`
+
+Login padrao:
+- usuario: `admin`
+- senha: `admin123`
+
+---
+
+## 6) E-mail (Gmail SMTP)
+
+### 6.1 Configurar variaveis no terminal local
+
+```powershell
+$env:SMTP_HOST="smtp.gmail.com"
+$env:SMTP_PORT="587"
+$env:SMTP_USER="seu_email@gmail.com"
+$env:SMTP_PASSWORD="SENHA_DE_APP_GOOGLE"
+$env:SMTP_FROM="seu_email@gmail.com"
+$env:SMTP_TO="destino@exemplo.com"
+```
+
+### 6.2 Teste direto de SMTP
+
+```powershell
+.\.venv\Scripts\python.exe test_email.py
+```
+
+Se funcionar, deve imprimir:
+- `E-mail de teste enviado com sucesso.`
+
+Observacao:
+- `SMTP_PASSWORD` deve ser senha de app do Google (nao a senha normal da conta).
+
+---
+
+## 7) Testes automatizados
+
+### 7.1 Rodar todos os testes
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py" -v
+```
+
+Estado atual esperado:
+- 21 testes
+- resultado `OK`
+
+### 7.2 Script de diagnostico local rapido
+
+```powershell
+.\test_local.ps1
+```
+
+Esse script:
+- instala deps
+- recria banco
+- sobe app temporariamente
+- testa endpoints basicos
+- finaliza processo
+
+---
+
+## 8) Subir para GitHub
+
+No seu computador:
 
 ```bash
 cd "C:\Users\samil\OneDrive\Documentos\Receitas"
 git status
 git add .
-git commit --trailer "Made-with: Cursor" -m "Configura deploy recomendado com systemd e env file"
+git commit --trailer "Made-with: Cursor" -m "Atualiza PDF completo e documentacao final"
 git push origin main
 ```
 
-### 3.2 Na VM (177.44.248.89)
+---
+
+## 9) Publicar na VM (177.44.248.89)
+
+SSH:
 
 ```bash
 ssh univates@177.44.248.89
+```
+
+### 9.1 Instalar ferramentas (uma vez)
+
+```bash
 sudo apt update
 sudo apt install -y git python3 python3-venv python3-pip
 ```
+
+### 9.2 Obter codigo
 
 Se ainda nao clonou:
 
@@ -59,7 +190,7 @@ cd Receitas-GC-
 git pull origin main
 ```
 
-### 3.3 Ambiente Python
+### 9.3 Ambiente e banco
 
 ```bash
 python3 -m venv .venv
@@ -70,24 +201,19 @@ python init_db.py
 
 ---
 
-## 4) Configurar segredos (arquivo env seguro)
+## 10) Deploy recomendado na VM (gunicorn + systemd)
 
-Crie pasta para configuracao e proteja permissao:
+### 10.1 Arquivo seguro de variaveis
 
 ```bash
 sudo mkdir -p /etc/receitas
 sudo cp deploy/receitas.env.example /etc/receitas/receitas.env
 sudo chown root:root /etc/receitas/receitas.env
 sudo chmod 600 /etc/receitas/receitas.env
-```
-
-Edite o arquivo:
-
-```bash
 sudo nano /etc/receitas/receitas.env
 ```
 
-Preencha com seus dados reais:
+Preencher com valores reais:
 
 ```env
 FLASK_SECRET_KEY=chave-grande-segura
@@ -95,36 +221,24 @@ PORT=5000
 FLASK_USE_RELOADER=0
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=boardlabgames@gmail.com
+SMTP_USER=seu_email@gmail.com
 SMTP_PASSWORD=SENHA_DE_APP_GOOGLE
-SMTP_FROM=boardlabgames@gmail.com
-SMTP_TO=samara.guindani@universo.univates.br
+SMTP_FROM=seu_email@gmail.com
+SMTP_TO=destino@exemplo.com
 ```
 
-Importante: `SMTP_PASSWORD` deve ser senha de app do Google, nao senha normal.
-
----
-
-## 5) Configurar service no systemd
-
-Copie o service de exemplo:
+### 10.2 Service systemd
 
 ```bash
 sudo cp deploy/receitas.service.example /etc/systemd/system/receitas.service
-```
-
-Se seu caminho do projeto for diferente de `/home/univates/Receitas-GC-`, edite:
-
-```bash
 sudo nano /etc/systemd/system/receitas.service
 ```
 
-Valide estes campos:
-- `WorkingDirectory`
-- `ExecStart`
-- `User`
+Validar:
+- `WorkingDirectory=/home/univates/Receitas-GC-`
+- `ExecStart=/home/univates/Receitas-GC-/.venv/bin/gunicorn --workers 2 --bind 0.0.0.0:${PORT} app:app`
 
-Depois ative:
+Ativar:
 
 ```bash
 sudo systemctl daemon-reload
@@ -132,7 +246,7 @@ sudo systemctl enable receitas
 sudo systemctl restart receitas
 ```
 
-Ver status/log:
+Logs/status:
 
 ```bash
 sudo systemctl status receitas --no-pager
@@ -141,7 +255,7 @@ sudo journalctl -u receitas -n 100 --no-pager
 
 ---
 
-## 6) Liberar porta e testar
+## 11) Liberar porta e testar na VM
 
 ```bash
 sudo ufw allow 5000/tcp
@@ -149,26 +263,27 @@ sudo ufw reload
 sudo ufw status
 ```
 
-Teste na VM:
+Teste dentro da VM:
 
 ```bash
 curl -v http://127.0.0.1:5000/login
+curl -v http://127.0.0.1:5000/health
 ```
 
-Teste no seu PC:
+Teste externo (do seu PC):
 
 ```bash
 curl -v http://177.44.248.89:5000/login
 ```
 
-URL:
-- http://177.44.248.89:5000
+URL final:
+- `http://177.44.248.89:5000`
 
 ---
 
-## 7) Atualizar app no futuro
+## 12) Comandos uteis de operacao
 
-Sempre que mudar codigo no GitHub:
+Atualizar app em producao:
 
 ```bash
 cd ~/Receitas-GC-
@@ -179,24 +294,23 @@ sudo systemctl restart receitas
 sudo systemctl status receitas --no-pager
 ```
 
----
+Ver erro de e-mail no log da app:
 
-## 8) Gmail (resumo rapido)
-
-1. Conta Google com verificacao em 2 etapas ativa
-2. Criar senha de app
-3. Colar senha de app em `SMTP_PASSWORD` no arquivo `/etc/receitas/receitas.env`
-4. Reiniciar service: `sudo systemctl restart receitas`
+```bash
+sudo journalctl -u receitas -n 200 --no-pager
+```
 
 ---
 
-## 9) Checklist final
+## 13) Checklist final (100% funcionamento)
 
-- [ ] Projeto atualizado no GitHub
-- [ ] Dependencias instaladas na VM
-- [ ] Banco criado com `python init_db.py`
-- [ ] `/etc/receitas/receitas.env` preenchido
-- [ ] `receitas.service` ativo no systemd
-- [ ] Porta 5000 liberada
-- [ ] URL abre externamente
-- [ ] Criar/editar receita envia e-mail
+- [ ] Local abre em `http://127.0.0.1:5000`
+- [ ] Login com `admin/admin123`
+- [ ] CRUD funcionando
+- [ ] Filtro por data funcionando
+- [ ] Filtro por tipo (`doce`/`salgada`) funcionando
+- [ ] PDF geral exporta `Nome | Tipo | Data | Descricao | Custo`
+- [ ] PDF individual por linha funcionando
+- [ ] `test_email.py` envia e-mail
+- [ ] `python -m unittest ...` retorna `OK` (21 testes)
+- [ ] VM acessivel em `http://177.44.248.89:5000`
