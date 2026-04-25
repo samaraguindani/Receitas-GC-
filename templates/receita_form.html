@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}{% if receita %}Editar{% else %}Nova{% endif %} receita{% endblock %}
 {% block content %}
 <h1 class="h3 mb-4">{% if receita %}Editar receita{% else %}Nova receita{% endif %}</h1>
@@ -12,7 +12,7 @@
                value="{{ receita.nome if receita else '' }}">
       </div>
       <div class="mb-3">
-        <label class="form-label" for="descricao">Descrição</label>
+        <label class="form-label" for="descricao">Descricao</label>
         <textarea class="form-control" id="descricao" name="descricao" rows="4">{{ receita.descricao if receita and receita.descricao else '' }}</textarea>
       </div>
       <div class="row g-3 mb-3">
@@ -27,19 +27,28 @@
                  value="{{ receita.custo if receita else '' }}">
         </div>
       </div>
-      <div class="mb-4">
-        <label class="form-label">Tipo</label>
-        <div class="d-flex gap-3">
-          <div class="form-check">
-            <input class="form-check-input" type="radio" name="tipo_receita" id="tipo_doce" value="doce"
-                   {% if not receita or receita.tipo_receita == 'doce' %}checked{% endif %}>
-            <label class="form-check-label" for="tipo_doce">Doce</label>
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">
+          <label class="form-label">Tipo</label>
+          <div class="d-flex gap-3">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="tipo_receita" id="tipo_doce" value="doce"
+                     {% if not receita or receita.tipo_receita == 'doce' %}checked{% endif %}>
+              <label class="form-check-label" for="tipo_doce">Doce</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="tipo_receita" id="tipo_salgada" value="salgada"
+                     {% if receita and receita.tipo_receita == 'salgada' %}checked{% endif %}>
+              <label class="form-check-label" for="tipo_salgada">Salgada</label>
+            </div>
           </div>
-          <div class="form-check">
-            <input class="form-check-input" type="radio" name="tipo_receita" id="tipo_salgada" value="salgada"
-                   {% if receita and receita.tipo_receita == 'salgada' %}checked{% endif %}>
-            <label class="form-check-label" for="tipo_salgada">Salgada</label>
-          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="status_receita">Status</label>
+          <select class="form-select" id="status_receita" name="status_receita">
+            <option value="ativa" {% if not receita or receita.status_receita == 'ativa' %}selected{% endif %}>Ativa</option>
+            <option value="inativa" {% if receita and receita.status_receita == 'inativa' %}selected{% endif %}>Inativa</option>
+          </select>
         </div>
       </div>
       <div class="d-flex gap-2">

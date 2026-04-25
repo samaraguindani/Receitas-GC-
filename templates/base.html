@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
@@ -13,7 +13,7 @@
     <div class="container">
       <a class="navbar-brand" href="{{ url_for('listar_receitas') }}">Receitas</a>
       <div class="navbar-nav ms-auto align-items-lg-center gap-2">
-        <span class="navbar-text text-white-50 small">Olá, {{ session.user_nome }}</span>
+        <span class="navbar-text text-white-50 small">Ola, {{ session.user_nome }}</span>
         <a class="btn btn-outline-light btn-sm" href="{{ url_for('logout') }}">Sair</a>
       </div>
     </div>

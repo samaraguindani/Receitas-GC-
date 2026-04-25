@@ -1,3 +1,4 @@
 Flask>=3.0.0,<4
 Werkzeug>=3.0.0,<4
 gunicorn>=21.0.0,<24
+reportlab>=4.0.0,<5
