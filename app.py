@@ -1,6 +1,7 @@
 import os
 import smtplib
 import sqlite3
+import threading
 from datetime import date
 from email.message import EmailMessage
 from functools import wraps
@@ -40,17 +41,29 @@ def create_app(test_config: dict | None = None) -> Flask:
         SMTP_PASSWORD=os.environ.get("SMTP_PASSWORD", ""),
         SMTP_FROM=os.environ.get("SMTP_FROM", ""),
         SMTP_TO=os.environ.get("SMTP_TO", ""),
+        EMAIL_TIMEOUT_SECONDS=int(os.environ.get("EMAIL_TIMEOUT_SECONDS", "3")),
+        EMAIL_ASYNC=os.environ.get("EMAIL_ASYNC", "1") == "1",
     )
 
     if test_config:
         app.config.update(test_config)
 
+    def init_database() -> None:
+        """Apply SQLite pragmas once on app startup."""
+        conn = sqlite3.connect(app.config["DATABASE"], timeout=10)
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.commit()
+        finally:
+            conn.close()
+
+    init_database()
+
     def get_db() -> sqlite3.Connection:
         if "db" not in g:
             g.db = sqlite3.connect(app.config["DATABASE"], timeout=10)
             g.db.row_factory = sqlite3.Row
-            # Reduz erros intermitentes de lock quando rodando com multiplos workers.
-            g.db.execute("PRAGMA journal_mode=WAL")
             g.db.execute("PRAGMA busy_timeout=5000")
         return g.db
 
@@ -117,11 +130,29 @@ def create_app(test_config: dict | None = None) -> Flask:
         detalhe_id = f" (ID {receita_id})" if receita_id is not None else ""
         msg.set_content(f"A receita '{receita_nome}'{detalhe_id} foi {acao} no sistema.")
 
-        with smtplib.SMTP(app.config["SMTP_HOST"], app.config["SMTP_PORT"], timeout=10) as server:
+        with smtplib.SMTP(
+            app.config["SMTP_HOST"],
+            app.config["SMTP_PORT"],
+            timeout=app.config["EMAIL_TIMEOUT_SECONDS"],
+        ) as server:
             server.starttls()
             server.login(smtp_user, smtp_password)
             server.send_message(msg)
         return True
+
+    def disparar_email_acao_receita(acao: str, receita_nome: str, receita_id: int) -> None:
+        def _worker():
+            try:
+                enviar_email_acao_receita(acao, receita_nome, receita_id)
+            except Exception:
+                app.logger.exception(
+                    "Falha ao enviar e-mail de notificacao (%s, id=%s).", acao, receita_id
+                )
+
+        if app.config["EMAIL_ASYNC"]:
+            threading.Thread(target=_worker, daemon=True).start()
+        else:
+            _worker()
 
     def exportar_receitas_pdf(receitas) -> bytes:
         buffer = BytesIO()
@@ -294,15 +325,9 @@ def create_app(test_config: dict | None = None) -> Flask:
             )
             db.commit()
 
-            try:
-                enviou = enviar_email_acao_receita("cadastrada", nome, cursor.lastrowid)
-                if enviou:
-                    flash("E-mail de notificacao enviado.", "info")
-            except Exception:
-                app.logger.exception("Falha ao enviar e-mail de notificacao (cadastro).")
-                flash("Receita salva, mas houve erro no envio de e-mail.", "warning")
-
+            disparar_email_acao_receita("cadastrada", nome, cursor.lastrowid)
             flash("Receita cadastrada.", "success")
+
             return redirect(url_for("listar_receitas"))
 
         return render_template("receita_form.html", receita=None)
@@ -345,15 +370,8 @@ def create_app(test_config: dict | None = None) -> Flask:
             )
             db.commit()
 
-            try:
-                enviou = enviar_email_acao_receita("atualizada", nome, rid)
-                if enviou:
-                    flash("E-mail de notificacao enviado.", "info")
-            except Exception:
-                app.logger.exception("Falha ao enviar e-mail de notificacao (edicao).")
-                flash("Receita atualizada, mas houve erro no envio de e-mail.", "warning")
-
             flash("Receita atualizada.", "success")
+            disparar_email_acao_receita("atualizada", nome, rid)
             return redirect(url_for("listar_receitas"))
 
         return render_template("receita_form.html", receita=dict(row))

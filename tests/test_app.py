@@ -21,6 +21,8 @@ class ReceitasAppTests(unittest.TestCase):
                 "TESTING": True,
                 "SECRET_KEY": "test-secret",
                 "DATABASE": str(self.db_path),
+                "EMAIL_ASYNC": False,
+                "EMAIL_TIMEOUT_SECONDS": 1,
             }
         )
         self.client = self.app.test_client()
